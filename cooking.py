@@ -33,21 +33,31 @@ def onIntent(intent_request, session):
     intent = intent_request['intent']
     intent_name = intent_request['intent']['name']
 
-    # Dispatch to your sk ill's intent handlers
+    #Intent to have recipe found
     if intent_name == "getRecipeIntent":
         return getRecipe(intent, session)
 
     #Intent to have ingredients read out
     elif intent_name == "readIngredientsIntent":
         return readIngredients(intent, session)
+        
+    #Intent to have recipe instructions read
     elif intent_name == "startRecipeIntent":
         return startRecipe(intent, session)
+    
+    #Intent to have next step read out
     elif intent_name == "nextStepIntent":
         return nextStep(intent, session)
+        
+    #Intent to have step repeated
     elif intent_name == "repeatStepIntent":
         return repeatStep(intent, session)
+        
+    #Intent to have previous step read out
     elif intent_name == "previousStepIntent":
         return previousStep(intent, session)
+        
+    #Standard AMAZON intents
     elif intent_name == "AMAZON.HelpIntent":
         return getWelcomeResponse()
     elif intent_name == "AMAZON.CancelIntent" or intent_name == "AMAZON.StopIntent":
