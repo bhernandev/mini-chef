@@ -1,0 +1,34 @@
+{
+  "intents": [
+    {
+      "intent": "getRecipeIntent",
+      "slots": [
+        {
+          "name": "Recipe",
+          "type": "LIST_OF_RECIPES"
+        }
+      ]
+    },
+    {
+      "intent": "readIngredientsIntent"
+    },
+    {
+      "intent": "startRecipeIntent"
+    },
+    {
+      "intent": "nextStepIntent"
+    },
+    {
+      "intent": "repeatStepIntent"
+    },
+    {
+      "intent": "previousStepIntent"
+    },
+    {
+      "intent": "AMAZON.HelpIntent"
+    },
+    {
+      "intent": "AMAZON.CancelIntent"
+    }
+  ]
+}
