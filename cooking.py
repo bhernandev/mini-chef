@@ -7,8 +7,8 @@ def lambdaHandler(event, context):
           event['session']['application']['applicationId'])
 
     #check if the application id matches the session id
-    if (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.[unique-value-here]"):
-        raise ValueError("Invalid Application ID")
+    #if (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.[unique-value-here]"):
+    #    raise ValueError("Invalid Application ID")
 
     #launch different function depending on type of request
     if event['request']['type'] == "LaunchRequest":
