@@ -7,8 +7,8 @@ def lambdaHandler(event, context):
           event['session']['application']['applicationId'])
 
     #check if the application id matches the session id
-    #if (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.[unique-value-here]"):
-    #    raise ValueError("Invalid Application ID")
+    if (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.d697caf7-a152-47e6-ad58-73c7f7bc65e4"):
+        raise ValueError("Invalid Application ID")
 
     #launch different function depending on type of request
     if event['request']['type'] == "LaunchRequest":
@@ -127,14 +127,15 @@ def getRecipe(intent, session):
 
             recipeInstructions = recipeData['text']
             #some recipe instructions don't exist, so if they do, store them and divide them into parts
+            session_attributes["recipeInstructions"] = []
             if recipeInstructions:
                 instructionsList = recipeInstructions.split('.');
+                session_attributes["recipeInstructions"] = instructionsList
             #instructionsList = [x for x in map(str.strip, recipeInstructions.split('.')) if x]
 
             #set the session attributes and card title for the companion app
             session_attributes["recipeName"] = recipeName
             card_title = "Ingredients for " + recipeName
-            session_attributes["recipeInstructions"] = instructionsList
             session_attributes["recipeFound"] = True
             session_attributes["recipeIngredients"] = recipeIngredients
 
