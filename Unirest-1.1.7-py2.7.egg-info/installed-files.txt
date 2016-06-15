@@ -1,0 +1,10 @@
+../unirest/__init__.py
+../unirest/utils.py
+../unirest/__init__.pyc
+../unirest/utils.pyc
+.
+dependency_links.txt
+PKG-INFO
+requires.txt
+SOURCES.txt
+top_level.txt
