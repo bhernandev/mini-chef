@@ -137,6 +137,7 @@ def sessionEndRequestHandle():
 
 #returns the top three most relevant recipes
 def getRecipe(intent, session):
+    card_title = "Chef Brian Could Not Find a Recipe"
     session_attributes = {}
     should_end_session = False
 
@@ -150,46 +151,52 @@ def getRecipe(intent, session):
         searchData = searchResponse.body
         searchSource = BeautifulSoup(searchData, 'html.parser') #the data from the response is just the HTML of the page, so to parse it we use Soup
 
-        recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
-        recipeName = recipe.get_text() #extract its text
-        recipeLink = recipe.get('href') #and the actual link
+        try:
+            recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
+            recipeName = recipe.get_text() #extract its text
+        except:
+            speech_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
+            text_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
+            reprompt_text = "I'm not sure I know how to cook that. " + "Want to to try something else?"
+        else:
+            recipeLink = recipe.get('href') #and the actual link
 
-        #we use the recipe link from the search to get the ingredients and instructions of the first recipe
-        recipeGetUrl = "http://www.epicurious.com" + recipeLink
-        recipeResponse = unirest.get(recipeGetUrl)
-        recipeData = recipeResponse.body
-        recipeSource = BeautifulSoup(recipeData, 'html.parser')
+            #we use the recipe link from the search to get the ingredients and instructions of the first recipe
+            recipeGetUrl = "http://www.epicurious.com" + recipeLink
+            recipeResponse = unirest.get(recipeGetUrl)
+            recipeData = recipeResponse.body
+            recipeSource = BeautifulSoup(recipeData, 'html.parser')
 
-        recipeIngredients = []
-        recipeInstructions = []
-        #for every <li> (list item) of class ingredient add its text to the list
-        for ingredient in recipeSource.find_all('li', { "class" : "ingredient" }):
-            recipeIngredients.append(ingredient.get_text() + ". ")
-        #for every <li> (list item) of class preparation-step add its text to the list
-        for step in recipeSource.find_all('li', { "class" : "preparation-step" }):
-            stepText = step.get_text()
-            stepText = stepText.strip() #strip the text of unnecessary spaces
-            stepSplit = re.split('([.](?=\s)', stepText) #split the string only if a period is followed by a space (ex: not 1.1)
-            for smallStep in stepSplit:
-                if len(smallStep) >= 4: #if the length of the step is larger than 4 character (i.e. not something like 1.) add it to the list
-                    recipeInstructions.append(smallStep)
+            recipeIngredients = []
+            recipeInstructions = []
+            #for every <li> (list item) of class ingredient add its text to the list
+            for ingredient in recipeSource.find_all('li', { "class" : "ingredient" }):
+                recipeIngredients.append(ingredient.get_text() + ". ")
+            #for every <li> (list item) of class preparation-step add its text to the list
+            for step in recipeSource.find_all('li', { "class" : "preparation-step" }):
+                stepText = step.get_text()
+                stepText = stepText.strip() #strip the text of unnecessary spaces
+                stepSplit = re.split('[.](?=\s)', stepText) #split the string only if a period is followed by a space (ex: not 1.1)
+                for smallStep in stepSplit:
+                    if len(smallStep) >= 4: #if the length of the step is larger than 4 character (i.e. not something like 1.) add it to the list
+                        recipeInstructions.append(smallStep)
 
-        #set the session attributes and card title for the companion app
-        session_attributes["recipeName"] = recipeName
-        card_title = "Ingredients for " + recipeName
-        session_attributes["recipeFound"] = True
-        session_attributes["recipeIngredients"] = recipeIngredients
-        session_attributes["recipeInstructions"] = recipeInstructions
-        session_attributes["currentStep"] = -1
+            #set the session attributes and card title for the companion app
+            session_attributes["recipeName"] = recipeName
+            card_title = "Ingredients for " + recipeName
+            session_attributes["recipeFound"] = True
+            session_attributes["recipeIngredients"] = recipeIngredients
+            session_attributes["recipeInstructions"] = recipeInstructions
+            session_attributes["currentStep"] = -1
 
-        #we save the recipe data in the table when we get it
-        storeRecipeData(session["user"]["userId"], recipeName, recipeIngredients, recipeInstructions, 0)
+            #we save the recipe data in the table when we get it
+            storeRecipeData(session["user"]["userId"], recipeName, recipeIngredients, recipeInstructions, 0)
 
-        speech_output = "Chef Brian just found a delicious " + recipeName+ " recipe for us to try. I sent the ingredients to your phone. " + "Would you like me to read them or jump straight to the instructions?"
-        text_output = "Ingredients:\n"
-        for ingredient in recipeIngredients:
-            text_output = text_output + ingredient + "\n"
-        reprompt_text = "To hear the ingredients just say 'ingredients'. To skip straight to the instructions say 'instructions'."
+            speech_output = "Chef Brian just found a delicious " + recipeName+ " recipe for us to try. I sent the ingredients to your phone. " + "Would you like me to read them or jump straight to the instructions?"
+            text_output = "Ingredients:\n"
+            for ingredient in recipeIngredients:
+                text_output = text_output + ingredient + "\n"
+            reprompt_text = "To hear the ingredients just say 'ingredients'. To skip straight to the instructions say 'instructions'."
     else:
         speech_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
         text_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
