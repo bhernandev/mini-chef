@@ -3,7 +3,8 @@ import sys  #for error handling in the database
 import unirest, json
 import boto3 #this is to use Amazon services like DynamoDB in our app
 import decimal #this is to do something with decimals
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup #for web scraping
+import re #for string splitting
 
 # Helper class to convert a DynamoDB item to JSON.
 #ignore this, I just copied it honestly, but basically when we get an item from DynamoDB
@@ -143,16 +144,17 @@ def getRecipe(intent, session):
     if 'Recipe' in intent['slots']:
         recipeSearchQuery = intent['slots']['Recipe']['value'] #store the name of the recipe
 
-        #scrape Epicurious search page for the first three recipes
+        #scrape Epicurious search page for the first (they're sorted by relevance) recipe
         searchUrl = "http://www.epicurious.com/tools/searchresults?search=" + recipeSearchQuery
         searchResponse = unirest.get(searchUrl)
         searchData = searchResponse.body
-        searchSource = BeautifulSoup(searchData, 'html.parser')
+        searchSource = BeautifulSoup(searchData, 'html.parser') #the data from the response is just the HTML of the page, so to parse it we use Soup
 
-        recipe = searchSource.find('a', { "class" : "recipeLnk" })
-        recipeName = recipe.get_text()
-        recipeLink = recipe.get('href')
+        recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
+        recipeName = recipe.get_text() #extract its text
+        recipeLink = recipe.get('href') #and the actual link
 
+        #we use the recipe link from the search to get the ingredients and instructions of the first recipe
         recipeGetUrl = "http://www.epicurious.com" + recipeLink
         recipeResponse = unirest.get(recipeGetUrl)
         recipeData = recipeResponse.body
@@ -160,14 +162,16 @@ def getRecipe(intent, session):
 
         recipeIngredients = []
         recipeInstructions = []
+        #for every <li> (list item) of class ingredient add its text to the list
         for ingredient in recipeSource.find_all('li', { "class" : "ingredient" }):
             recipeIngredients.append(ingredient.get_text() + ". ")
+        #for every <li> (list item) of class preparation-step add its text to the list
         for step in recipeSource.find_all('li', { "class" : "preparation-step" }):
             stepText = step.get_text()
-            stepText = stepText.strip()
-            stepSplit = stepText.split('.')
+            stepText = stepText.strip() #strip the text of unnecessary spaces
+            stepSplit = re.split('([.](?=\s)', stepText) #split the string only if a period is followed by a space (ex: not 1.1)
             for smallStep in stepSplit:
-                if len(smallStep) >= 4:
+                if len(smallStep) >= 4: #if the length of the step is larger than 4 character (i.e. not something like 1.) add it to the list
                     recipeInstructions.append(smallStep)
 
         #set the session attributes and card title for the companion app
