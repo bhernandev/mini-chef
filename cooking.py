@@ -155,9 +155,10 @@ def getRecipe(intent, session):
             recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
             recipeName = recipe.get_text() #extract its text
         except:
-            speech_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
-            text_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
-            reprompt_text = "I'm not sure I know how to cook that. " + "Want to to try something else?"
+            speech_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+            text_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+            reprompt_text = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+            should_end_session = True
         else:
             recipeLink = recipe.get('href') #and the actual link
 
@@ -198,9 +199,10 @@ def getRecipe(intent, session):
                 text_output = text_output + ingredient + "\n"
             reprompt_text = "To hear the ingredients just say 'ingredients'. To skip straight to the instructions say 'instructions'."
     else:
-        speech_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
-        text_output = "I'm not sure I know how to cook that. " + "Want to to try something else?"
-        reprompt_text = "I'm not sure I know how to cook that. " + "Want to to try something else?"
+        speech_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+        text_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+        reprompt_text = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+        should_end_session = True
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
