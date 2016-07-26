@@ -57,7 +57,7 @@ def onLaunch(launch_request, session):
     """ Called when the user launches the skill without specifying what they want"""
 
     # get the welcome response
-    return getWelcomeResponse()
+    return getWelcomeResponse(session)
 
 #Function to handle all incoming intents
 def onIntent(intent_request, session):
@@ -90,8 +90,9 @@ def onIntent(intent_request, session):
     #intent to load recipe data
     elif intent_name == "loadRecipeIntent":
             return loadRecipe(intent, session)
+    #help intent
     elif intent_name == "AMAZON.HelpIntent":
-        return getWelcomeResponse()
+        return helpResponse(intent, session)
     #quit intents
     elif intent_name == "AMAZON.CancelIntent" or intent_name == "AMAZON.StopIntent":
         return sessionEndRequestHandle()
@@ -107,18 +108,48 @@ def onSessionEnded(session_ended_request, session):
 
 # --------------- Functions for all of the intents ------------------
 #returns the welcome response when no intent is specified
-def getWelcomeResponse():
-    session_attributes = {}
-    session_attributes["currentStep"] = -1
-    session_attributes["recipeName"] = ""
-    session_attributes["recipeInstructions"] = []
-    session_attributes["recipeFound"] = False
-    session_attributes["recipeIngredients"] = []
+def getWelcomeResponse(session):
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        session_attributes["currentStep"] = -1
+        session_attributes["recipeName"] = ""
+        session_attributes["recipeInstructions"] = []
+        session_attributes["recipeFound"] = False
+        session_attributes["recipeIngredients"] = []
 
-    card_title = "Time to Cook"
-    speech_output = "Time to cook!" + " First, let's tell chef Brian what you want to make."
-    text_output = "Time to cook!" + " First, let's tell chef Brian what you want to make."
-    reprompt_text = "You can ask Chef Brian to find a recipe by saying 'Let's make chocolate chip cookies' for example."
+        card_title = "Time to Cook"
+        speech_output = "Time to cook!" + " First, let's tell mini chef what you want to make."
+        text_output = "Time to cook!" + " First, let's tell mini chef what you want to make."
+        reprompt_text = "You can ask mini chef to find a recipe by saying 'Let's make chocolate chip cookies' for example. To hear the full list of commands just say 'help'."
+        should_end_session = False
+    else:
+        card_title = "Welcome Back"
+        speech_output = "Welcome back. To continue cooking from where you stopped just say 'continue cooking'."
+        text_output = "To continue cooking from where you stopped just say 'continue cooking'."
+        reprompt_text = "To hear the full list of commands just say 'help'."
+        should_end_session = False
+
+    return buildResponse(session_attributes, buildSpeechResponse(
+        card_title, speech_output, text_output, reprompt_text, should_end_session))
+
+#returns the help response
+def helpResponse(intent, session):
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        session_attributes["currentStep"] = -1
+        session_attributes["recipeName"] = ""
+        session_attributes["recipeInstructions"] = []
+        session_attributes["recipeFound"] = False
+        session_attributes["recipeIngredients"] = []
+
+    card_title = "mini chef - Help"
+    speech_output = "Hi, I'm mini chef! Here are some things you can say: 'let's make chocolate chip cookies', 'ingredients', 'instructions, next', 'go back', 'repeat', or continue cooking'. Lastly, you can also say stop if you're done cooking. Now, what would you like to do?"
+    text_output = "Here are some things you can say: 'let's make chocolate chip cookies', 'ingredients', 'instructions, next' or 'go on', 'previous' or 'go back', 'repeat' or 'what', or continue cooking'. Lastly, you can also say stop if you're done cooking."
+    reprompt_text = ""
     should_end_session = False
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
@@ -137,164 +168,200 @@ def sessionEndRequestHandle():
 
 #returns the top three most relevant recipes
 def getRecipe(intent, session):
-    card_title = "Chef Brian Could Not Find a Recipe"
+    card_title = "mini chef Could Not Find a Recipe"
     session_attributes = {}
     should_end_session = False
 
     #if the recipe list exists in the slots (slots list is specified in Amazon developer console)
     if 'Recipe' in intent['slots']:
-        recipeSearchQuery = intent['slots']['Recipe']['value'] #store the name of the recipe
-
-        #scrape Epicurious search page for the first (they're sorted by relevance) recipe
-        searchUrl = "http://www.epicurious.com/tools/searchresults?search=" + recipeSearchQuery
-        searchResponse = unirest.get(searchUrl)
-        searchData = searchResponse.body
-        searchSource = BeautifulSoup(searchData, 'html.parser') #the data from the response is just the HTML of the page, so to parse it we use Soup
-
         try:
-            recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
-            recipeName = recipe.get_text() #extract its text
+            recipeSearchQuery = intent['slots']['Recipe']['value'] #store the name of the recipe
         except:
-            speech_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
-            text_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
-            reprompt_text = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
-            should_end_session = True
+            speech_output = "What was that?"
+            text_output = "What was that?"
+            reprompt_text = "What was that?"
+            should_end_session = False
+            return buildResponse(session_attributes, buildSpeechResponse(card_title, speech_output, text_output, reprompt_text, should_end_session))
         else:
-            recipeLink = recipe.get('href') #and the actual link
+            #scrape Epicurious search page for the first (they're sorted by relevance) recipe
+            searchUrl = "http://www.epicurious.com/tools/searchresults?search=" + recipeSearchQuery
+            searchResponse = unirest.get(searchUrl)
+            searchData = searchResponse.body
+            searchSource = BeautifulSoup(searchData, 'html.parser') #the data from the response is just the HTML of the page, so to parse it we use Soup
 
-            #we use the recipe link from the search to get the ingredients and instructions of the first recipe
-            recipeGetUrl = "http://www.epicurious.com" + recipeLink
-            recipeResponse = unirest.get(recipeGetUrl)
-            recipeData = recipeResponse.body
-            recipeSource = BeautifulSoup(recipeData, 'html.parser')
+            try:
+                recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
+                recipeName = recipe.get_text() #extract its text
+            except:
+                speech_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
+                text_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
+                reprompt_text = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
+                should_end_session = True
+            else:
+                recipeLink = recipe.get('href') #and the actual link
 
-            recipeIngredients = []
-            recipeInstructions = []
-            #for every <li> (list item) of class ingredient add its text to the list
-            for ingredient in recipeSource.find_all('li', { "class" : "ingredient" }):
-                recipeIngredients.append(ingredient.get_text() + ". ")
-            #for every <li> (list item) of class preparation-step add its text to the list
-            for step in recipeSource.find_all('li', { "class" : "preparation-step" }):
-                stepText = step.get_text()
-                stepText = stepText.strip() #strip the text of unnecessary spaces
-                stepSplit = re.split('[.](?=\s)', stepText) #split the string only if a period is followed by a space (ex: not 1.1)
-                for smallStep in stepSplit:
-                    if len(smallStep) >= 4: #if the length of the step is larger than 4 character (i.e. not something like 1.) add it to the list
-                        recipeInstructions.append(smallStep)
+                #we use the recipe link from the search to get the ingredients and instructions of the first recipe
+                recipeGetUrl = "http://www.epicurious.com" + recipeLink
+                recipeResponse = unirest.get(recipeGetUrl)
+                recipeData = recipeResponse.body
+                recipeSource = BeautifulSoup(recipeData, 'html.parser')
 
-            #set the session attributes and card title for the companion app
-            session_attributes["recipeName"] = recipeName
-            card_title = "Ingredients for " + recipeName
-            session_attributes["recipeFound"] = True
-            session_attributes["recipeIngredients"] = recipeIngredients
-            session_attributes["recipeInstructions"] = recipeInstructions
-            session_attributes["currentStep"] = -1
+                recipeIngredients = []
+                recipeInstructions = []
+                #for every <li> (list item) of class ingredient add its text to the list
+                for ingredient in recipeSource.find_all('li', { "class" : "ingredient" }):
+                    recipeIngredients.append(ingredient.get_text() + ". ")
+                #for every <li> (list item) of class preparation-step add its text to the list
+                for step in recipeSource.find_all('li', { "class" : "preparation-step" }):
+                    stepText = step.get_text()
+                    stepText = stepText.strip() #strip the text of unnecessary spaces
+                    stepSplit = re.split('[.](?=\s)', stepText) #split the string only if a period is followed by a space (ex: not 1.1)
+                    for smallStep in stepSplit:
+                        if len(smallStep) >= 4: #if the length of the step is larger than 4 character (i.e. not something like 1.) add it to the list
+                            recipeInstructions.append(smallStep)
 
-            #we save the recipe data in the table when we get it
-            storeRecipeData(session["user"]["userId"], recipeName, recipeIngredients, recipeInstructions, 0)
+                #set the session attributes and card title for the companion app
+                session_attributes["recipeName"] = recipeName
+                card_title = "Ingredients for " + recipeName
+                session_attributes["recipeFound"] = True
+                session_attributes["recipeIngredients"] = recipeIngredients
+                session_attributes["recipeInstructions"] = recipeInstructions
+                session_attributes["currentStep"] = -1
 
-            speech_output = "Chef Brian just found a delicious " + recipeName+ " recipe for us to try. I sent the ingredients to your phone. " + "Would you like me to read them or jump straight to the instructions?"
-            text_output = "Ingredients:\n"
-            for ingredient in recipeIngredients:
-                text_output = text_output + ingredient + "\n"
-            reprompt_text = "To hear the ingredients just say 'ingredients'. To skip straight to the instructions say 'instructions'."
+                #we save the recipe data in the table when we get it
+                storeRecipeData(session["user"]["userId"], recipeName, recipeIngredients, recipeInstructions, 0)
+
+                speech_output = "mini chef just found a delicious " + recipeName+ " recipe for us to try. I sent the ingredients to the Alexa companion app. " + "Would you like me to read them or jump straight to the instructions?"
+                text_output = "Ingredients:\n"
+                for ingredient in recipeIngredients:
+                    text_output = text_output + ingredient + "\n"
+                reprompt_text = "To hear the ingredients just say 'ingredients'. To skip straight to the instructions say 'instructions'."
     else:
-        speech_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
-        text_output = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
-        reprompt_text = "I'm sorry, but Chef Brian doesn't have a recipe for " + recipeSearchQuery + "."
+        speech_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
+        text_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
+        reprompt_text = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
         should_end_session = True
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
 #read the ingredients list aloud
 def readIngredients(intent, session):
-
-    card_title = "Ingredients for " + session["attributes"]["recipeName"]
-    session_attributes = session["attributes"]
-    should_end_session = False
-    speech_output = ""
-    ingredientsList = session["attributes"]["recipeIngredients"]
-
-    if session["attributes"]["recipeFound"] == True:
-        #we save the recipe data in every intent actually just for safety, so no matter what happens, it's always saved
-        storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], ingredientsList, session["attributes"]["recipeInstructions"], 0)
-
-        for ingredient in ingredientsList:
-            speech_output += ingredient
-        #speech_output += " <break time="1ms"/>  Say instructions when you're ready to start cooking."
-        text_output = ""
-        reprompt_text = "Say instructions when you're ready to start cooking."
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        should_end_session = True
+        card_title = "We Need Something to Cook First"
+        speech_output = "We need something to cook first."
+        text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+        reprompt_text = "What was that?"
     else:
-        speech_output = "I don't understand what you're saying, bro."
-        text_output = "I don't understand what you're saying, bro."
-        reprompt_text = "I don't understand what you're saying, bro."
+        card_title = "Ingredients for " + session["attributes"]["recipeName"]
+
+        should_end_session = False
+        speech_output = ""
+        ingredientsList = session["attributes"]["recipeIngredients"]
+
+        if session["attributes"]["recipeFound"] == True:
+            #we save the recipe data in every intent actually just for safety, so no matter what happens, it's always saved
+            storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], ingredientsList, session["attributes"]["recipeInstructions"], 0)
+
+            for ingredient in ingredientsList:
+                speech_output += ingredient
+            speech_output += ". Would you like me to repeat the ingredients or go to the instructions?"
+            text_output = ""
+            reprompt_text = "Say 'instructions' when you're ready to start cooking."
+        else:
+            speech_output = "I don't understand what you're saying, bro."
+            text_output = "I don't understand what you're saying, bro."
+            reprompt_text = "I don't understand what you're saying, bro."
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
 #start reading the recipe instructions
 def startRecipe(intent, session):
-
-    card_title = session["attributes"]["recipeName"]
-    session_attributes = session["attributes"]
-    should_end_session = True
-
-    #only attempt to read the recipe if it was already found, otherwise prompt to first choose a recipe to make
-    if session["attributes"]["recipeFound"] == True:
-        recipeText = session["attributes"]["recipeInstructions"]
-        if recipeText:
-            should_end_session = False
-            session_attributes["currentStep"] = 0
-            currentStep = session_attributes["currentStep"]
-            storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
-
-            speech_output = "Let's start cooking! "+ recipeText[currentStep]
-            text_output = recipeText[currentStep]
-            reprompt_text = ""
-        else:
-            speech_output = "There are no instructions for this recipe."
-            text_output = "There are no instructions for this recipe."
-            reprompt_text = "There are no instructions for this recipe."
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        should_end_session = True
+        card_title = "We Need Something to Cook First"
+        speech_output = "We need something to cook first."
+        text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+        reprompt_text = "What was that?"
     else:
-        speech_output = "First, we need a recipe to cook!"
-        text_output = "First, we need a recipe to cook!"
-        reprompt_text = "First, we need a recipe to cook!"
+        card_title = session["attributes"]["recipeName"]
+
+        #only attempt to read the recipe if it was already found, otherwise prompt to first choose a recipe to make
+        if session["attributes"]["recipeFound"] == True:
+            recipeText = session["attributes"]["recipeInstructions"]
+            if recipeText:
+                should_end_session = False
+                session_attributes["currentStep"] = 0
+                currentStep = session_attributes["currentStep"]
+                storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
+
+                speech_output = "Let's start cooking! "+ recipeText[currentStep]
+                speech_output += ". Would you like me to repeat this step or go to the next one?"
+                text_output = recipeText[currentStep]
+                reprompt_text = "Just say 'next' to go to the next step."
+            else:
+                speech_output = "There are no instructions for this recipe."
+                text_output = "There are no instructions for this recipe."
+                reprompt_text = "There are no instructions for this recipe."
+        else:
+            should_end_session = True
+            card_title = "We Need Something to Cook First"
+            speech_output = "We need something to cook first."
+            text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+            reprompt_text = "What was that?"
 
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
 #go to the next step in the recipe instructions
 def nextStep(intent, session):
-
-    session_attributes = session["attributes"]
-    should_end_session = False
-
-    recipeText = session["attributes"]["recipeInstructions"]
-    currentStep = session["attributes"]["currentStep"]
-    currentStep += 1 #increment a current step variable by 1
-    card_title = "Step " + `currentStep + 1`
-
-    if currentStep > 0 and currentStep < len(recipeText):
-
-        session_attributes["currentStep"] = currentStep #save the current step to the session attributes
-        storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
-
-        speech_output = recipeText[currentStep]
-        text_output = recipeText[currentStep]
-        reprompt_text = ""
-
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        should_end_session = True
+        card_title = "We Need Something to Cook First"
+        speech_output = "We need something to cook first."
+        text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+        reprompt_text = "What was that?"
     else:
-        if currentStep <= 0:
-            card_title = "I Don't Know What to Make"
-            should_end_session = False
-            speech_output = "First, we need a recipe to cook!"
-            text_output = "First, we need a recipe to cook!"
-            reprompt_text = "First, we need a recipe to cook!"
-        elif currentStep >= len(recipeText) and len(recipeText) > 0:
-            card_title = "Finished!"
-            should_end_session = True
-            speech_output = "All done. Enjoy your meal."
-            text_output = "All done. Enjoy your meal."
-            reprompt_text = "All done. Enjoy your meal."
+        should_end_session = False
+        recipeFound = session["attributes"]["recipeFound"]
+
+        recipeText = session["attributes"]["recipeInstructions"]
+        currentStep = session["attributes"]["currentStep"]
+        currentStep += 1 #increment a current step variable by 1
+        card_title = "Step " + `currentStep + 1`
+
+        if currentStep > 0 and currentStep < len(recipeText):
+
+            session_attributes["currentStep"] = currentStep #save the current step to the session attributes
+            storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
+
+            speech_output = recipeText[currentStep]
+            speech_output += ". Would you like me to repeat this step, go back to the previous one or go to the next one?"
+            text_output = recipeText[currentStep]
+            reprompt_text = "Just say 'next' to go to the next step."
+
+        else:
+            if currentStep <= 0:
+                should_end_session = True
+                card_title = "We Need Something to Cook First"
+                speech_output = "We need something to cook first."
+                text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+                reprompt_text = "What was that?"
+            elif currentStep >= len(recipeText) and len(recipeText) > 0:
+                card_title = "Finished!"
+                should_end_session = True
+                speech_output = "All done. Enjoy your meal."
+                text_output = "All done. Enjoy your meal."
+                reprompt_text = "All done. Enjoy your meal."
 
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
@@ -302,82 +369,100 @@ def nextStep(intent, session):
 
 #repeat the current step (don't increment current step)
 def repeatStep(intent, session):
-
-    session_attributes = session["attributes"]
-    should_end_session = False
-
-    recipeText = session["attributes"]["recipeInstructions"]
-    currentStep = session["attributes"]["currentStep"]
-    card_title = "Step " + `currentStep + 1`
-
-    if currentStep >= 0 and currentStep < len(recipeText):
-
-        session_attributes["currentStep"] = currentStep
-        storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
-
-        speech_output = recipeText[currentStep]
-        text_output = recipeText[currentStep]
-        reprompt_text = ""
-
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        should_end_session = True
+        card_title = "We Need Something to Cook First"
+        speech_output = "We need something to cook first."
+        text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+        reprompt_text = "What was that?"
     else:
-        if currentStep < 0:
-            card_title = "I Don't Know What to Make"
-            should_end_session = False
-            speech_output = "First, we need a recipe to cook!"
-            text_output = "First, we need a recipe to cook!"
-            reprompt_text = "First, we need a recipe to cook!"
-        elif currentStep >= len(recipeText) and len(recipeText) > 0:
-            card_title = "Finished!"
-            should_end_session = True
-            speech_output = "All done. Enjoy your meal."
-            text_output = "All done. Enjoy your meal."
-            reprompt_text = "All done. Enjoy your meal."
+        should_end_session = False
+
+        recipeText = session["attributes"]["recipeInstructions"]
+        currentStep = session["attributes"]["currentStep"]
+        card_title = "Step " + `currentStep + 1`
+
+        if currentStep >= 0 and currentStep < len(recipeText):
+
+            session_attributes["currentStep"] = currentStep
+            storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
+
+            speech_output = recipeText[currentStep]
+            speech_output += ". Would you like me to repeat this step or go to the next one?"
+            text_output = recipeText[currentStep]
+            reprompt_text = "Just say 'next' to go to the next step."
+
+        else:
+            if currentStep < 0:
+                should_end_session = True
+                card_title = "We Need Something to Cook First"
+                speech_output = "We need something to cook first."
+                text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+                reprompt_text = "What was that?"
+            elif currentStep >= len(recipeText) and len(recipeText) > 0:
+                card_title = "Finished!"
+                should_end_session = True
+                speech_output = "All done. Enjoy your meal."
+                text_output = "All done. Enjoy your meal."
+                reprompt_text = "All done. Enjoy your meal."
 
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
 #read the previous step of the recipe instructions
 def previousStep(intent, session):
-
-    session_attributes = session["attributes"]
-    should_end_session = False
-
-    recipeText = session["attributes"]["recipeInstructions"]
-    currentStep = session["attributes"]["currentStep"]
-    currentStep -= 1  #decrement current steo by 1
-    card_title = "Step " + `currentStep + 1`
-
-    if currentStep >= 0 and currentStep < len(recipeText):
-
-        session_attributes["currentStep"] = currentStep
-        storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
-
-        speech_output = recipeText[currentStep]
-        text_output = recipeText[currentStep]
-        reprompt_text = recipeText[currentStep]
-
+    try:
+        session_attributes = session["attributes"]
+    except:
+        session_attributes = {}
+        should_end_session = True
+        card_title = "We Need Something to Cook First"
+        speech_output = "We need something to cook first."
+        text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+        reprompt_text = "What was that?"
     else:
-        if currentStep < 0:
-            if session["attributes"]["recipeFound"] == True:
-                currentStep += 1
-                session_attributes["currentStep"] = currentStep
-                card_title = "Step " + `currentStep + 1`
-                should_end_session = False
-                speech_output = recipeText[currentStep]
-                text_output = recipeText[currentStep]
-                reprompt_text = ""
-            else:
-                card_title = "I Don't Know What to Make"
-                should_end_session = False
-                speech_output = "First, we need a recipe to cook!"
-                text_output = "First, we need a recipe to cook!"
-                reprompt_text = "First, we need a recipe to cook!"
-        elif currentStep >= len(recipeText) and len(recipeText) > 0:
-            card_title = "Finished!"
-            should_end_session = True
-            speech_output = "All done. Enjoy your meal."
-            text_output = "All done. Enjoy your meal."
-            reprompt_text = "All done. Enjoy your meal."
+        should_end_session = False
+
+        recipeText = session["attributes"]["recipeInstructions"]
+        currentStep = session["attributes"]["currentStep"]
+        currentStep -= 1  #decrement current steo by 1
+        card_title = "Step " + `currentStep + 1`
+
+        if currentStep >= 0 and currentStep < len(recipeText):
+
+            session_attributes["currentStep"] = currentStep
+            storeRecipeData(session["user"]["userId"], session["attributes"]["recipeName"], session["attributes"]["recipeIngredients"], recipeText, currentStep)
+
+            speech_output = recipeText[currentStep]
+            speech_output += ". Would you like me to repeat this step or go to the next one?"
+            text_output = recipeText[currentStep]
+            reprompt_text = "Just say 'next' to go to the next step."
+
+        else:
+            if currentStep < 0:
+                if session["attributes"]["recipeFound"] == True:
+                    currentStep += 1
+                    session_attributes["currentStep"] = currentStep
+                    card_title = "Step " + `currentStep + 1`
+                    should_end_session = False
+                    speech_output = recipeText[currentStep]
+                    text_output = recipeText[currentStep]
+                    reprompt_text = ""
+                else:
+                    should_end_session = True
+                    card_title = "We Need Something to Cook First"
+                    speech_output = "We need something to cook first."
+                    text_output = "You can start cooking a recipe by saying 'Alexa, let's make chocolate chip cookies for example."
+                    reprompt_text = "What was that?"
+            elif currentStep >= len(recipeText) and len(recipeText) > 0:
+                card_title = "Finished!"
+                should_end_session = True
+                speech_output = "All done. Enjoy your meal."
+                text_output = "All done. Enjoy your meal."
+                reprompt_text = "All done. Enjoy your meal."
 
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
@@ -397,11 +482,11 @@ def loadRecipe(intent, session):
         session_attributes["recipeIngredients"] = recipe["recipeIngredients"]
 
         card_title = recipe["recipeName"] + " recipe found"
-        should_end_session = True
         recipeText = recipe["recipeInstructions"]
         speech_output = "We stopped on step " + str(recipe["currentStep"]+1) + ". " + recipeText[recipe["currentStep"]]
+        speech_output += ". Would you like me to repeat this step or go to the next one?"
         text_output = "We stopped on step " + str(recipe["currentStep"]+1) + ". " + recipeText[recipe["currentStep"]]
-        reprompt_text = "Just say 'go on' to advance to the next step."
+        reprompt_text = "Just say 'next' to go to the next step."
         should_end_session = False
     #otherwise set the sesison attributes to defaults and say that no recipe data could be found
     else:
@@ -413,10 +498,9 @@ def loadRecipe(intent, session):
 
         card_title = "Couldn't find a saved recipe"
         should_end_session = True
-        speech_output = "It seems like I couldn't find a recipe in progress."
+        speech_output = "It seems like I couldn't find a recipe in progress. Say 'let's make' and the name of a dish to start cooking it."
         text_output = "It seems like I couldn't find a recipe in progress."
-        reprompt_text = "Say 'let's make' and the name of a dish to start cooking it."
-        should_end_session = False
+        reprompt_text = ""
 
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
