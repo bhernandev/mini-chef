@@ -31,8 +31,6 @@ class DecimalEncoder(json.JSONEncoder):
 
 #sets up the DynamoDB client to create tables and the resource to work with those tables
 #I use my secret security credentials, but you'll have to generate and use your own
-dynamodbClient = boto3.client('dynamodb', region_name='us-east-1', aws_access_key_id = 'AKIAIRX4AHMIKRW2GSFQ', aws_secret_access_key = 'rpi9uieGyxenqi8pSA5LArn/euPr98edO8SD0N8b',)
-dynamodbResource = boto3.resource('dynamodb', region_name='us-east-1', aws_access_key_id = 'AKIAIRX4AHMIKRW2GSFQ', aws_secret_access_key = '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',)
 TABLE_NAME_FOR_ANY_ACCOUNT = "chefBrianData"
 
 # --------------- Request handler ------------------
