@@ -1,15 +1,13 @@
-from __future__ import print_function #required to use print starting from Python 2
-import sys  #for error handling in the database
+from __future__ import print_function # to use print starting from Python 2
+import sys  # for error handling in the database
 import unirest, json
-import boto3 #this is to use Amazon services like DynamoDB in our app
-import decimal #this is to do something with decimals
-from bs4 import BeautifulSoup #for web scraping
-import re #for string splitting
+import boto3 # to use Amazon services like DynamoDB
+import decimal
+from bs4 import BeautifulSoup # for web scraping
+import re # for string splitting
 
-# Helper class to convert a DynamoDB item to JSON.
-#ignore this, I just copied it honestly, but basically when we get an item from DynamoDB
-#it gets it in binary and then we convert it to a regular dictionary
 class DecimalEncoder(json.JSONEncoder):
+    """Helper class to convert a DynamoDB item to JSON."""
     def default(self, o):
         if isinstance(o, decimal.Decimal):
             if o % 1 > 0:
@@ -18,16 +16,6 @@ class DecimalEncoder(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
-#---------------------------FUCK THE COMMENTED SHIT----------------------------
-#sts_client = boto3.client('sts')
-
-# assumedRoleObject = sts_client.assume_role(
-#     RoleArn="arn:aws:iam::437414226734:role/ChefBrian",
-#     RoleSessionName="AssumeRoleSession1"
-# )
-# credentials = assumedRoleObject['Credentials']
-
-#dynamodb = boto3.resource('dynamodb', region_name='us-east-1', aws_access_key_id = credentials['AccessKeyId'], aws_secret_access_key = credentials['SecretAccessKey'], aws_session_token = credentials['SessionToken'],)
 
 #sets up the DynamoDB client to create tables and the resource to work with those tables
 #I use my secret security credentials, but you'll have to generate and use your own
@@ -41,7 +29,7 @@ def lambdaHandler(event, context):
           event['session']['application']['applicationId'])
 
     #check if the application id matches the session id
-    if (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.d697caf7-a152-47e6-ad58-73c7f7bc65e4"):
+    if (event['session']['application']['applicationId'] != "<something secret"):
         raise ValueError("Invalid Application ID")
 
     #launch different function depending on type of request
@@ -55,11 +43,8 @@ def lambdaHandler(event, context):
 # --------------- Request Handles ------------------
 def onLaunch(launch_request, session):
     """ Called when the user launches the skill without specifying what they want"""
-
-    # get the welcome response
     return getWelcomeResponse(session)
 
-#Function to handle all incoming intents
 def onIntent(intent_request, session):
     """ Called when the user specifies an intent for this skill """
 
@@ -99,16 +84,15 @@ def onIntent(intent_request, session):
     else:
         raise ValueError("Invalid intent")
 
-
 def onSessionEnded(session_ended_request, session):
     """ Called when the user ends the session. Is not called when the skill returns should_end_session=true"""
-
     print("on_session_ended requestId=" + session_ended_request['requestId'] + ", sessionId=" + session['sessionId'])
 
 
 # --------------- Functions for all of the intents ------------------
-#returns the welcome response when no intent is specified
 def getWelcomeResponse(session):
+    """Return the welcome response when no intent is specified"""
+
     try:
         session_attributes = session["attributes"]
     except:
@@ -134,8 +118,9 @@ def getWelcomeResponse(session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#returns the help response
 def helpResponse(intent, session):
+    """Return the help response"""
+
     try:
         session_attributes = session["attributes"]
     except:
@@ -154,9 +139,9 @@ def helpResponse(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-
-#returns the end session response for when a user escapes the session
 def sessionEndRequestHandle():
+    """Return the end session response for when a user escapes the session"""
+
     card_title = "Voila, All Done"
     speech_output = "I hope cooking with me was fun. " + "Bon appetit!"
     text_output = "I hope cooking with me was fun. " + "Bon appetit!"
@@ -165,9 +150,9 @@ def sessionEndRequestHandle():
     return buildResponse({}, buildSpeechResponse(
         card_title, speech_output, text_output, None, should_end_session))
 
-
-#returns the top three most relevant recipes
 def getRecipe(intent, session):
+    """Return the most relevant recipe"""
+
     card_title = "mini chef Could Not Find a Recipe"
     session_attributes = {}
     should_end_session = False
@@ -184,14 +169,14 @@ def getRecipe(intent, session):
             return buildResponse(session_attributes, buildSpeechResponse(card_title, speech_output, text_output, reprompt_text, should_end_session))
         else:
             #scrape Epicurious search page for the first (they're sorted by relevance) recipe
-            searchUrl = "http://www.epicurious.com/tools/searchresults?search=" + recipeSearchQuery
+            searchUrl = "http://www.epicurious.com/search/" + recipeSearchQuery + "?content=recipe"
             searchResponse = unirest.get(searchUrl)
             searchData = searchResponse.body
             searchSource = BeautifulSoup(searchData, 'html.parser') #the data from the response is just the HTML of the page, so to parse it we use Soup
 
             try:
-                recipe = searchSource.find('a', { "class" : "recipeLnk" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
-                recipeName = recipe.get_text() #extract its text
+                recipe = searchSource.find('a', { "class" : "view-complete-item" }) #we find the first '<a>' HTML tag (link) with a class of recipeLnk
+                recipeName = recipe.get('title') #extract its text
             except:
                 speech_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
                 text_output = "I'm sorry, but mini chef doesn't have a recipe for " + recipeSearchQuery + "."
@@ -244,8 +229,9 @@ def getRecipe(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#read the ingredients list aloud
 def readIngredients(intent, session):
+    """Read the ingredients list aloud"""
+
     try:
         session_attributes = session["attributes"]
     except:
@@ -278,8 +264,8 @@ def readIngredients(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#start reading the recipe instructions
 def startRecipe(intent, session):
+    """Start reading the recipe instructions"""
     try:
         session_attributes = session["attributes"]
     except:
@@ -319,8 +305,8 @@ def startRecipe(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#go to the next step in the recipe instructions
 def nextStep(intent, session):
+    """Go to the next step in the recipe instructions"""
     try:
         session_attributes = session["attributes"]
     except:
@@ -366,9 +352,9 @@ def nextStep(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-
-#repeat the current step (don't increment current step)
 def repeatStep(intent, session):
+    """Repeat the current step (don't increment current step)"""
+
     try:
         session_attributes = session["attributes"]
     except:
@@ -412,8 +398,9 @@ def repeatStep(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#read the previous step of the recipe instructions
 def previousStep(intent, session):
+    """Read the previous step of the recipe instructions"""
+
     try:
         session_attributes = session["attributes"]
     except:
@@ -467,8 +454,9 @@ def previousStep(intent, session):
     return buildResponse(session_attributes, buildSpeechResponse(
         card_title, speech_output, text_output, reprompt_text, should_end_session))
 
-#this function loads the recipe data
 def loadRecipe(intent, session):
+    """Load the recipe data"""
+
     session_attributes = {}
 
     #retrieve the recipe data from the table
@@ -507,8 +495,8 @@ def loadRecipe(intent, session):
 
 
 # --------------- Helpers that build all of the responses ----------------------
-#build the json for the speech response for Alexa
 def buildSpeechResponse(title, output, text_output, reprompt_text, should_end_session):
+    """Build the json for the speech response for Alexa"""
     return {
         'outputSpeech': {
             'type': 'PlainText',
@@ -528,8 +516,8 @@ def buildSpeechResponse(title, output, text_output, reprompt_text, should_end_se
         'shouldEndSession': should_end_session#
     }
 
-#function that builds the entire json response including passing in the session attributes
 def buildResponse(session_attributes, speechlet_response):
+    """Build the entire json response including passing in the session attributes"""
     return {
         'version': '1.0',
         'sessionAttributes': session_attributes,
